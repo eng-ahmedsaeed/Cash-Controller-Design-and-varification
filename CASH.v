@@ -85,29 +85,29 @@ module Cache (
       end
     end else if (loade) begin
       // Load data from memory into cache
-      found_place <= 0;
-      selected_way <= 0;
+ //here i have done some search and found the synthisize tool treat them as temporary variable and replace them by compartor in real hardware
+      found_place = 0;
+      selected_way = 0;
       hit <= 0;
-
-
+///here i consider in scenrio of trying to load data that is already in cache
       for (i = 0; i < WAYS; i = i + 1) begin
         if (!Valid[index][i] && !found_place) begin
-          selected_way <= i;
-          found_place  <= 1;
+          selected_way = i;
+          found_place  = 1;
         end
       end
       if (!found_place) begin
-        min_lru <= LRUcounter[index][0];
-        selected_way <= 0;
+        min_lru = LRUcounter[index][0];
+        selected_way = 0;
 
         for (i = 1; i < WAYS; i = i + 1) begin
           if (LRUcounter[index][i] < min_lru) begin
-            min_lru <= LRUcounter[index][i];
-            selected_way <= i;
+            min_lru = LRUcounter[index][i];
+            selected_way = i;
           end
         end
       end
-
+///here i considere that if  i loaded the data then gone to do some tasks if LRU is set to zero it will replace that data first and this wrong 
       Data[index][selected_way] <= datain;
       Tag[index][selected_way] <= tag;
       Valid[index][selected_way] <= 1'b1;

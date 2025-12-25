@@ -24,23 +24,23 @@ module cache_controller (
     localparam TAGLENGTH    = ADDRESSLENGTH - INDEXLENGTH - OFFSETLENGTH;
 
     /* ---------------- Wires ---------------- */
-    wire [TAGLENGTH-1:0]   tag   = cpu_addr[15 -: TAGLENGTH];
-    wire [INDEXLENGTH-1:0] index = cpu_addr[OFFSETLENGTH +: INDEXLENGTH];
+wire [TAGLENGTH-1:0]   tag   = cpu_addr[ADDRESSLENGTH-1 -: TAGLENGTH];
+wire [INDEXLENGTH-1:0] index = cpu_addr[OFFSETLENGTH +: INDEXLENGTH];
 
     wire [31:0] cache_rdata;
     wire [31:0] ram_rdata;
     wire        hit;
-
+reg [31:0] ram_rdata_reg;
     reg ram_re, ram_we;
     reg loade;
 
     /* ---------------- FSM ---------------- */
-    localparam IDLE = 2'd0,
-               RAM_WAIT = 2'd1,
-               LOAD = 2'd2,
-               DONE = 2'd3;
-
-    reg [1:0] state, next_state;
+    localparam IDLE = 3'd0,
+               RAM_WAIT = 3'd1,
+               LOAD1 = 3'd2,
+               LOAD2 = 3'd3,
+               DONE = 3'd4;
+    reg [2:0] state, next_state;
 
     /* ---------------- Cache Instance ---------------- */
     Cache cache_inst (
@@ -50,7 +50,7 @@ module cache_controller (
         .reset(reset),
         .we(cpu_we),
         .re(cpu_re),
-        .datain(ram_rdata),
+        .datain(loade ? ram_rdata_reg : cpu_wdata),
         .dataout(cache_rdata),
         .hit(hit),
         .loade(loade)
@@ -63,7 +63,8 @@ module cache_controller (
         .datain(cpu_wdata),
         .dataout(ram_rdata),
         .RE(ram_re),
-        .WE(ram_we)
+        .WE(ram_we),
+        .reset(reset)
     );
 
     /* ---------------- State Register ---------------- */
@@ -75,6 +76,8 @@ module cache_controller (
     end
 
     /* ---------------- FSM Logic ---------------- */
+
+    //next state logic
     always @(*) begin
         next_state = state;
 
@@ -89,13 +92,15 @@ module cache_controller (
             end
 
             RAM_WAIT: begin
-                next_state = LOAD;
+                next_state = LOAD1;
             end
 
-            LOAD: begin
+            LOAD1: begin
+                next_state = LOAD2;
+            end
+            LOAD2: begin
                 next_state = DONE;
             end
-
             DONE: begin
                 next_state = IDLE;
             end
@@ -110,6 +115,8 @@ module cache_controller (
             ram_re    <= 0;
             ram_we    <= 0;
             loade     <= 0;
+            ram_rdata_reg <= 0;
+
         end else begin
             ready  <= 0;
             ram_re <= 0;
@@ -123,13 +130,20 @@ module cache_controller (
                     if (cpu_we)
                         ram_we <= 1;
                 end
-
-                LOAD: begin
-                    loade <= 1;
+                RAM_WAIT: begin
+                    ram_re <= 1;
                 end
 
+                LOAD1: begin
+                    ram_rdata_reg <= ram_rdata; 
+                end
+                LOAD2: begin
+                    loade <= 1;
+
+                    end
+
                 DONE: begin
-                    cpu_rdata <= hit ? cache_rdata : ram_rdata;
+                    cpu_rdata <= hit ? cache_rdata : ram_rdata_reg;
                     ready <= 1;
                 end
             endcase
