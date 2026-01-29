@@ -8,7 +8,8 @@ module Cache (
     reset,
     we,
     re,
-    loade
+    loade,
+    cache_enable
 );
 
 
@@ -30,7 +31,7 @@ module Cache (
   input wire we;
   input wire re;
   input wire [DATALENGTH-1:0] datain;
-
+  input wire cache_enable;
   output reg [DATALENGTH-1:0] dataout;
   output reg hit;
   input wire loade;
@@ -40,7 +41,7 @@ module Cache (
 
   reg     [DATALENGTH-1:0] Data         [0:NUM_SETS-1][0:WAYS-1];
   reg     [ TAGLENGTH-1:0] Tag          [0:NUM_SETS-1][0:WAYS-1];
-  reg                      Valid        [0:NUM_SETS-1][0:WAYS-1];
+  reg                      Valid       [0:NUM_SETS-1][0:WAYS-1];
   reg     [ LRULENGTH-1:0] LRUcounter   [0:NUM_SETS-1][0:WAYS-1];
 
 
@@ -48,48 +49,30 @@ module Cache (
   integer                  selected_way;
   reg                      found_place;
   reg     [ LRULENGTH-1:0] min_lru;
-
+  always @(*) begin
+    hit = 0;
+    if (cache_enable && (re || we)) begin
+      for (i = 0; i < WAYS; i = i + 1) if (Valid[index][i] && Tag[index][i] == tag) hit = 1;
+    end
+  end
 
   always @(posedge clk or posedge reset) begin
-
     if (reset) begin
-      hit     <= 0;
       dataout <= 0;
-
+      hit <= 0;
       for (j = 0; j < NUM_SETS; j = j + 1) begin
         for (i = 0; i < WAYS; i = i + 1) begin
           Valid[j][i]      <= 0;
           LRUcounter[j][i] <= 0;
         end
       end
-    end else if (re) begin
-      hit <= 0;
-
-      for (i = 0; i < WAYS; i = i + 1) begin
-        if (Valid[index][i] && Tag[index][i] == tag) begin
-          hit                  <= 1;
-          dataout              <= Data[index][i];
-          LRUcounter[index][i] <= LRUcounter[index][i] + 1;
-        end
-      end
-    end else if (we) begin
-
-      hit <= 0;
-
-      for (i = 0; i < WAYS; i = i + 1) begin
-        if (Valid[index][i] && Tag[index][i] == tag) begin
-          hit                  <= 1;
-          Data[index][i]       <= datain;
-          LRUcounter[index][i] <= LRUcounter[index][i] + 1;
-        end
-      end
-    end else if (loade) begin
+    end else if (loade && cache_enable) begin
       // Load data from memory into cache
- //here i have done some search and found the synthisize tool treat them as temporary variable and replace them by compartor in real hardware
-      found_place = 0;
+      //here i have done some search and found the synthisize tool treat them as temporary variable and replace them by compartor in real hardware
+      found_place  = 0;
       selected_way = 0;
-      hit <= 0;
-///here i consider in scenrio of trying to load data that is already in cache
+
+      ///here i consider in scenrio of trying to load data that is already in cache
       for (i = 0; i < WAYS; i = i + 1) begin
         if (!Valid[index][i] && !found_place) begin
           selected_way = i;
@@ -99,7 +82,6 @@ module Cache (
       if (!found_place) begin
         min_lru = LRUcounter[index][0];
         selected_way = 0;
-
         for (i = 1; i < WAYS; i = i + 1) begin
           if (LRUcounter[index][i] < min_lru) begin
             min_lru = LRUcounter[index][i];
@@ -107,11 +89,42 @@ module Cache (
           end
         end
       end
-///here i considere that if  i loaded the data then gone to do some tasks if LRU is set to zero it will replace that data first and this wrong 
-      Data[index][selected_way] <= datain;
-      Tag[index][selected_way] <= tag;
+      ///here i considere that if  i loaded the data then gone to do some tasks if LRU is set to zero it will replace that data first and this wrong 
+      Data[index][selected_way]  <= datain;
+      Tag[index][selected_way]   <= tag;
       Valid[index][selected_way] <= 1'b1;
+      for (j = 0; j < NUM_SETS; j = j + 1) begin
+        for (i = 0; i < WAYS; i = i + 1) begin
+          LRUcounter[j][i] <= 0;
+        end
+      end
       LRUcounter[index][selected_way] <= LRUcounter[index][selected_way] + 1;
+
+
+
+
+
+    end else if (re && cache_enable) begin
+      for (i = 0; i < WAYS; i = i + 1) begin
+        if (Valid[index][i] && Tag[index][i] == tag) begin
+
+          dataout              <= Data[index][i];
+          LRUcounter[index][i] <= LRUcounter[index][i] + 1;
+
+        end
+      end
+
+
+
+
+    end else if (we && cache_enable) begin
+
+      for (i = 0; i < WAYS; i = i + 1) begin
+        if (Valid[index][i] && Tag[index][i] == tag) begin
+          Data[index][i]       <= datain;
+          LRUcounter[index][i] <= LRUcounter[index][i] + 1;
+        end
+      end
     end
 
 

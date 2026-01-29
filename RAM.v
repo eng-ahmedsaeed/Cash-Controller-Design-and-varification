@@ -15,8 +15,10 @@ module RAM (
   input wire RE;
   input wire WE;
   output reg [DATALENGTH-1:0] dataout;
-  reg [DATALENGTH-1:0] mem[0:(1<<ADDLENGTH)-1];
-
+  reg [DATALENGTH-1:0] mem[0:ADDLENGTH-1];
+initial begin
+    $readmemh("ram_init.hex", mem);
+end
   always @(posedge clk) begin
     if (WE) begin
       mem[addr] <= datain;
